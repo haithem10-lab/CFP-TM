@@ -2,43 +2,32 @@ import React, { useEffect, useState } from 'react';
 import TaskItem from './TaskItem';
 import { Task } from '../types/Task';
 import taskService from '../services/taskService';
-import { z } from 'zod';
+import AddTaskForm from './AddTaskForm';
 
 const nextStatus: Record<Task['status'], Task['status']> = {
   pending: 'done',
   done: 'pending',
 };
 
-const TaskSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().min(1),
-});
-
 const TaskCard = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [openColumn, setOpenColumn] = useState<Task['status'] | null>(null);
 
   useEffect(() => {
     taskService.getAll().then(setTasks);
   }, []);
 
-  const handleAddTask = (status: Task['status']) => {
-    const title = prompt("Titre de la tâche :");
-    const description = prompt("Description :");
-
-    const result = TaskSchema.safeParse({ title, description });
-    if (!result.success) {
-      alert("Entrée invalide : " + result.error.issues.map(i => i.message).join(', '));
-      return;
-    }
-
+  const handleAddTask = (title: string, description: string, status: Task['status']) => {
     const newTask: Task = {
       id: crypto.randomUUID(),
-      title: result.data.title,
-      description: result.data.description,
+      title,
+      description,
       status,
     };
-
-    taskService.create(newTask).then(res => setTasks(prev => [...prev, res]));
+    taskService.create(newTask).then(res => {
+      setTasks(prev => [...prev, res]);
+      setOpenColumn(null);
+    });
   };
 
   const handleDeleteTask = (id: string) => {
@@ -49,7 +38,6 @@ const TaskCard = () => {
 
   const handleStatusUpdate = (id: string, currentStatus: Task['status']) => {
     const newStatus: Task['status'] = nextStatus[currentStatus];
-
     taskService.updateStatus(id, newStatus).then(() => {
       setTasks(prev =>
         prev.map(task => (task.id === id ? { ...task, status: newStatus } : task))
@@ -72,12 +60,20 @@ const TaskCard = () => {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-800">{col.label}</h2>
             <button
-              onClick={() => handleAddTask(col.key)}
+              onClick={() => setOpenColumn(col.key)}
               className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
             >
               + Ajouter
             </button>
           </div>
+
+          {openColumn === col.key && (
+            <AddTaskForm
+              onSubmit={(title: string, description: string) => handleAddTask(title, description, col.key)}
+              onCancel={() => setOpenColumn(null)}
+            />
+          )}
+
           <div className="space-y-4">
             {tasks
               .filter(t => t.status === col.key)
